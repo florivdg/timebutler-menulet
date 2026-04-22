@@ -1,7 +1,18 @@
 import Foundation
 
+struct Project: Codable, Equatable, Hashable {
+    var value: String
+    var label: String
+}
+
 enum TimebutlerAction: String, CaseIterable, Codable, Hashable {
     case checkIn, pause, resume, checkOut
+
+    struct Endpoint: Equatable {
+        var method: String
+        var url: String
+        var body: String?
+    }
 
     var displayName: String {
         switch self {
@@ -9,6 +20,27 @@ enum TimebutlerAction: String, CaseIterable, Codable, Hashable {
         case .pause: return "Pause"
         case .resume: return "Resume"
         case .checkOut: return "Check Out"
+        }
+    }
+
+    var endpoint: Endpoint {
+        switch self {
+        case .checkIn:
+            return Endpoint(method: "GET",
+                            url: "https://app.timebutler.com/do?ha=zee&ac=101&compid=&ajx=1&_={{t}}",
+                            body: nil)
+        case .pause:
+            return Endpoint(method: "GET",
+                            url: "https://app.timebutler.com/do?ha=zee&ac=102&compid=&ajx=1&_={{t}}",
+                            body: nil)
+        case .resume:
+            return Endpoint(method: "GET",
+                            url: "https://app.timebutler.com/do?ha=zee&ac=101&compid=&ajx=1&_={{t}}",
+                            body: nil)
+        case .checkOut:
+            return Endpoint(method: "GET",
+                            url: "https://app.timebutler.com/do?ha=zee&ac=103&projid=93529&katid=-1&compid=&ajx=1&_={{t}}",
+                            body: nil)
         }
     }
 
@@ -29,14 +61,12 @@ enum TimebutlerAction: String, CaseIterable, Codable, Hashable {
 final class TimebutlerClient {
     enum ClientError: Error, LocalizedError {
         case expired
-        case noEndpoint(TimebutlerAction)
         case http(Int)
         case malformed
 
         var errorDescription: String? {
             switch self {
             case .expired: return "Timebutler session expired."
-            case .noEndpoint(let a): return "No recorded endpoint for \(a.displayName). Use Record Endpoints…"
             case .http(let c): return "Timebutler returned HTTP \(c)."
             case .malformed: return "Unexpected response from Timebutler."
             }
@@ -51,22 +81,15 @@ final class TimebutlerClient {
     }
 
     func perform(_ action: TimebutlerAction, projectValue: String? = nil) async throws {
-        let registry = EndpointRegistry.load()
-        guard let ep = registry.endpoint(for: action) else { throw ClientError.noEndpoint(action) }
+        let ep = action.endpoint
 
-        let needsCSRF = ep.url.contains("{{csrf}}") || (ep.body ?? "").contains("{{csrf}}")
-        let token: String? = needsCSRF ? try await fetchCSRFToken() : nil
         let timestamp = String(Int(Date().timeIntervalSince1970 * 1000))
         func subst(_ s: String) -> String {
             var out = s
-            if let v = projectValue {
-                out = out.replacingOccurrences(of: "{{project}}", with: v)
-                if let re = try? NSRegularExpression(pattern: "projid=\\d+", options: []) {
-                    let r = NSRange(out.startIndex..., in: out)
-                    out = re.stringByReplacingMatches(in: out, options: [], range: r, withTemplate: "projid=\(v)")
-                }
+            if let v = projectValue, let re = try? NSRegularExpression(pattern: "projid=\\d+", options: []) {
+                let r = NSRange(out.startIndex..., in: out)
+                out = re.stringByReplacingMatches(in: out, options: [], range: r, withTemplate: "projid=\(v)")
             }
-            out = out.replacingOccurrences(of: "{{csrf}}", with: token ?? "")
             out = out.replacingOccurrences(of: "{{t}}", with: timestamp)
             return out
         }
@@ -92,11 +115,6 @@ final class TimebutlerClient {
     func fetchStatus() async throws -> WorkStatus {
         let html = try await fetchDashboardHTML()
         return HTMLScraper.parseStatus(from: html) ?? .loggedIn
-    }
-
-    private func fetchCSRFToken() async throws -> String? {
-        let html = try await fetchDashboardHTML()
-        return HTMLScraper.extractCSRFToken(from: html)
     }
 
     private func fetchDashboardHTML() async throws -> String {

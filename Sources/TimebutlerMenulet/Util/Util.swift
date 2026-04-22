@@ -1,12 +1,11 @@
 import Foundation
 
 enum WindowID: String, CaseIterable {
-    case login, recorder, prefs
+    case login, prefs
 
     var title: String {
         switch self {
         case .login: return "Timebutler Login"
-        case .recorder: return "Record Endpoints"
         case .prefs: return "Preferences"
         }
     }

@@ -7,8 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "TimebutlerMenulet",
-            path: "Sources/TimebutlerMenulet",
-            resources: [.copy("Resources")]
+            path: "Sources/TimebutlerMenulet"
         )
     ]
 )

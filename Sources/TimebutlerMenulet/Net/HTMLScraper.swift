@@ -1,27 +1,6 @@
 import Foundation
 
 enum HTMLScraper {
-    static func extractCSRFToken(from html: String) -> String? {
-        for n in EndpointRegistry.csrfNames {
-            let escaped = NSRegularExpression.escapedPattern(for: n)
-            let patterns = [
-                "name=\"\(escaped)\"[^>]*\\svalue=\"([^\"]+)\"",
-                "value=\"([^\"]+)\"[^>]*\\sname=\"\(escaped)\"",
-                "\"\(escaped)\"\\s*:\\s*\"([^\"]+)\"",
-                "\(escaped)\\s*=\\s*'([^']+)'"
-            ]
-            for p in patterns {
-                if let re = try? NSRegularExpression(pattern: p, options: [.caseInsensitive]),
-                   let m = re.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
-                   m.numberOfRanges > 1,
-                   let r = Range(m.range(at: 1), in: html), !html[r].isEmpty {
-                    return String(html[r])
-                }
-            }
-        }
-        return nil
-    }
-
     // Returns an activity state if the HTML contains a clear marker.
     // Never returns `.loggedOut` — that's determined by URLSession redirect detection
     // in TimebutlerClient. Returning nil means "logged in, couldn't parse activity".

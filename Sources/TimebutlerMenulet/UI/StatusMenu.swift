@@ -11,16 +11,15 @@ struct StatusMenu: View {
         }
         Divider()
         Button("Check In") { Task { await state.perform(.checkIn) } }
-            .disabled(!canCheckIn || !state.endpoints.has(.checkIn))
+            .disabled(!canCheckIn)
         Button("Pause") { Task { await state.perform(.pause) } }
-            .disabled(!canPause || !state.endpoints.has(.pause))
+            .disabled(!canPause)
         Button("Resume") { Task { await state.perform(.resume) } }
-            .disabled(!canResume || !state.endpoints.has(.resume))
+            .disabled(!canResume)
         Button("Check Out") { Task { await state.perform(.checkOut) } }
-            .disabled(!canCheckOut || !state.endpoints.has(.checkOut))
+            .disabled(!canCheckOut)
         Divider()
         Button("Login…") { open(.login) }
-        Button("Record Endpoints…") { open(.recorder) }
         Button("Refresh Status") { Task { await state.refreshStatus() } }
         Button("Preferences…") { open(.prefs) }
         Divider()

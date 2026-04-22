@@ -52,13 +52,6 @@ struct PreferencesView: View {
                     }
                 }
             }
-
-            Section("Endpoints file") {
-                Text(EndpointRegistry.url.path)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
         .padding()

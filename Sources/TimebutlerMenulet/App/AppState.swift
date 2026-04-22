@@ -26,11 +26,9 @@ enum WorkStatus: Equatable {
 final class AppState: ObservableObject {
     @Published var status: WorkStatus = .unknown
     @Published var lastError: String?
-    @Published var endpoints: EndpointRegistry
     @Published private var tick: Date = .init()
 
     let session: SessionManager
-    let recorderModel: RecorderModel
     let client: TimebutlerClient
 
     private var pollTimer: Timer?
@@ -61,8 +59,6 @@ final class AppState: ObservableObject {
     init() {
         let session = SessionManager()
         self.session = session
-        self.endpoints = EndpointRegistry.load()
-        self.recorderModel = RecorderModel(session: session, sniffer: SnifferScript.content)
         self.client = TimebutlerClient(session: session)
 
         Task { await self.refreshStatus() }
@@ -120,9 +116,5 @@ final class AppState: ObservableObject {
         let i = pop.indexOfSelectedItem
         guard projects.indices.contains(i) else { return nil }
         return projects[i]
-    }
-
-    func reloadEndpoints() {
-        endpoints = EndpointRegistry.load()
     }
 }

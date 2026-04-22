@@ -33,12 +33,6 @@ struct TimebutlerMenuletApp: App {
         }
         .windowResizability(.contentSize)
 
-        Window(WindowID.recorder.title, id: WindowID.recorder.rawValue) {
-            RecorderWindow().environmentObject(state)
-                .frame(minWidth: 760, minHeight: 780)
-        }
-        .windowResizability(.contentSize)
-
         Window(WindowID.prefs.title, id: WindowID.prefs.rawValue) {
             PreferencesView().environmentObject(state)
                 .frame(minWidth: 440, minHeight: 240)
