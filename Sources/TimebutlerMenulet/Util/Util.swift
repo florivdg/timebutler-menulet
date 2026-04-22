@@ -12,6 +12,10 @@ enum WindowID: String, CaseIterable {
     }
 }
 
+enum PreferenceKey {
+    static let showDurationInMenuBar = "timebutler.showDurationInMenuBar"
+}
+
 extension String {
     var jsEscaped: String {
         var out = ""

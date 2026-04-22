@@ -11,12 +11,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct TimebutlerMenuletApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state = AppState()
+    @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
 
     var body: some Scene {
         MenuBarExtra {
             StatusMenu().environmentObject(state)
         } label: {
-            Image(systemName: state.icon)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: state.icon)
+                if showDurationInMenuBar, let duration = state.menuBarDurationText {
+                    Text(duration)
+                }
+            }
+            .font(.system(size: NSFont.systemFontSize))
         }
         .menuBarExtraStyle(.menu)
 

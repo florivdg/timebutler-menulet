@@ -5,6 +5,7 @@ struct PreferencesView: View {
     @State private var email: String = Keychain.readCredentials()?.email ?? ""
     @State private var password: String = Keychain.readCredentials()?.password ?? ""
     @State private var savedCreds = false
+    @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
 
     var body: some View {
         Form {
@@ -19,6 +20,11 @@ struct PreferencesView: View {
                     if savedCreds { Text("Saved").foregroundStyle(.secondary) }
                     Spacer()
                 }
+            }
+
+            Section("Menu bar") {
+                Toggle("Show duration next to icon", isOn: $showDurationInMenuBar)
+                    .toggleStyle(.checkbox)
             }
 
             Section("Check-out projects (built-in)") {

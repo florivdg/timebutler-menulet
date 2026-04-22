@@ -13,6 +13,13 @@ enum WorkStatus: Equatable {
     var isWorking: Bool { if case .working = self { return true } else { return false } }
     var isPaused: Bool { if case .paused = self { return true } else { return false } }
     var isUncertainActivity: Bool { self == .loggedIn || self == .unknown }
+
+    var since: Date? {
+        switch self {
+        case .working(let s), .paused(let s): return s
+        default: return nil
+        }
+    }
 }
 
 @MainActor
@@ -20,12 +27,14 @@ final class AppState: ObservableObject {
     @Published var status: WorkStatus = .unknown
     @Published var lastError: String?
     @Published var endpoints: EndpointRegistry
+    @Published private var tick: Date = .init()
 
     let session: SessionManager
     let recorderModel: RecorderModel
     let client: TimebutlerClient
 
     private var pollTimer: Timer?
+    private var uiTickTimer: Timer?
 
     var icon: String {
         switch status {
@@ -38,6 +47,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    static func elapsed(_ since: Date, now: Date = Date()) -> String {
+        let s = Int(now.timeIntervalSince(since))
+        return String(format: "%dh %02dm", s / 3600, (s % 3600) / 60)
+    }
+
+    var menuBarDurationText: String? {
+        _ = tick
+        guard let since = status.since else { return nil }
+        return Self.elapsed(since)
+    }
+
     init() {
         let session = SessionManager()
         self.session = session
@@ -48,6 +68,9 @@ final class AppState: ObservableObject {
         Task { await self.refreshStatus() }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { await self?.refreshStatus() }
+        }
+        uiTickTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick = Date() }
         }
     }
 

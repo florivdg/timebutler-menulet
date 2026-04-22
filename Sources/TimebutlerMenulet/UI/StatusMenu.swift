@@ -35,10 +35,10 @@ struct StatusMenu: View {
         case .loggedIn: return "Logged in · activity unknown"
         case .checkedOut: return "Checked out"
         case .working(let since):
-            if let since { return "Working · since \(Self.hm(since)) · \(Self.elapsed(since))" }
+            if let since { return "Working · since \(Self.hm(since)) · \(AppState.elapsed(since))" }
             return "Working"
         case .paused(let since):
-            if let since { return "Paused · since \(Self.hm(since)) · \(Self.elapsed(since))" }
+            if let since { return "Paused · since \(Self.hm(since)) · \(AppState.elapsed(since))" }
             return "Paused"
         }
     }
@@ -61,9 +61,5 @@ struct StatusMenu: View {
 
     private static func hm(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: d)
-    }
-    private static func elapsed(_ d: Date) -> String {
-        let s = Int(Date().timeIntervalSince(d))
-        return String(format: "%02dh %02dm", s / 3600, (s % 3600) / 60)
     }
 }
