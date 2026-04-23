@@ -1,38 +1,43 @@
 import Foundation
 
 enum HTMLScraper {
-    // Returns an activity state if the HTML contains a clear marker.
+    // The Timebutler dashboard renders a `<div id="time-clock" data-paused=… data-running=…
+    // data-dauersec=… data-pausesec=…>` widget. Those attributes are the source of truth for
+    // session state — the human-readable status sentences are filled in later by JS and are
+    // not present in the HTML we fetch via URLSession.
+    //
+    // Returns nil if the widget is missing entirely (caller normalizes that to `.loggedIn`).
     // Never returns `.loggedOut` — that's determined by URLSession redirect detection
-    // in TimebutlerClient. Returning nil means "logged in, couldn't parse activity".
+    // in TimebutlerClient.
     static func parseStatus(from html: String) -> WorkStatus? {
-        let lower = html.lowercased()
-
-        // "Gestartet um HH:MM" — currently working with known start time.
-        if let re = try? NSRegularExpression(pattern: #"gestartet um\s+(\d{1,2}):(\d{2})"#,
-                                             options: [.caseInsensitive]),
-           let m = re.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
-           m.numberOfRanges >= 3,
-           let hRange = Range(m.range(at: 1), in: lower),
-           let mRange = Range(m.range(at: 2), in: lower),
-           let hour = Int(lower[hRange]),
-           let minute = Int(lower[mRange]) {
-            let cal = Calendar.current
-            let today = cal.startOfDay(for: Date())
-            let start = cal.date(bySettingHour: hour, minute: minute, second: 0, of: today)
-            return .working(since: start)
+        guard html.range(of: #"id="time-clock""#, options: .regularExpression) != nil else {
+            return nil
         }
 
-        let working = ["arbeitszeit läuft", "stempeluhr läuft", "laufende arbeitszeit",
-                       "checked in", "clock running", "clock is running"]
-        let paused  = ["pausiert", "auf pause", "pause läuft", "currently on break",
-                       "break running", "break in progress"]
-        let out     = ["nicht eingecheckt", "ausgecheckt", "noch nicht eingecheckt",
-                       "clock stopped", "not clocked in", "not checked in",
-                       "keine laufende arbeitszeit"]
+        func attr(_ name: String) -> String? {
+            let pattern = "\(name)=\"([^\"]*)\""
+            guard let re = try? NSRegularExpression(pattern: pattern),
+                  let m = re.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+                  m.numberOfRanges >= 2,
+                  let r = Range(m.range(at: 1), in: html) else { return nil }
+            return String(html[r])
+        }
 
-        if working.contains(where: { lower.contains($0) }) { return .working(since: nil) }
-        if paused.contains(where:  { lower.contains($0) }) { return .paused(since: nil) }
-        if out.contains(where:     { lower.contains($0) }) { return .checkedOut }
-        return nil
+        let paused = attr("data-paused") == "1"
+        let running = attr("data-running") == "1"
+        let dauersec = Int(attr("data-dauersec") ?? "") ?? 0
+        let pausesec = Int(attr("data-pausesec") ?? "") ?? 0
+        let now = Date()
+
+        if paused {
+            let since = pausesec > 0 ? now.addingTimeInterval(-Double(pausesec)) : nil
+            return .paused(since: since)
+        }
+        if running {
+            let total = dauersec + pausesec
+            let since = total > 0 ? now.addingTimeInterval(-Double(total)) : nil
+            return .working(since: since)
+        }
+        return .checkedOut
     }
 }
