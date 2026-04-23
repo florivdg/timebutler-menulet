@@ -7,8 +7,8 @@ enum WorkStatus: Equatable {
     case loggedOut
     case loggedIn
     case checkedOut
-    case working(since: Date?)
-    case paused(since: Date?)
+    case working(start: Date?, origin: Date)
+    case paused(start: Date?, origin: Date)
 
     var isWorking: Bool { if case .working = self { return true } else { return false } }
     var isPaused: Bool { if case .paused = self { return true } else { return false } }
@@ -16,7 +16,7 @@ enum WorkStatus: Equatable {
 
     var since: Date? {
         switch self {
-        case .working(let s), .paused(let s): return s
+        case .working(let s, _), .paused(let s, _): return s
         default: return nil
         }
     }
@@ -46,14 +46,18 @@ final class AppState: ObservableObject {
     }
 
     static func elapsed(_ since: Date, now: Date = Date()) -> String {
-        let s = Int(now.timeIntervalSince(since))
+        let s = max(0, Int(now.timeIntervalSince(since)))
         return String(format: "%dh %02dm", s / 3600, (s % 3600) / 60)
     }
 
     var menuBarDurationText: String? {
         _ = tick
-        guard let since = status.since else { return nil }
-        return Self.elapsed(since)
+        switch status {
+        case .working(_, let origin), .paused(_, let origin):
+            return Self.elapsed(origin)
+        default:
+            return nil
+        }
     }
 
     init() {

@@ -30,13 +30,16 @@ enum HTMLScraper {
         let now = Date()
 
         if paused {
-            let since = pausesec > 0 ? now.addingTimeInterval(-Double(pausesec)) : nil
-            return .paused(since: since)
+            let origin = now.addingTimeInterval(-Double(pausesec))
+            return .paused(start: pausesec > 0 ? origin : nil, origin: origin)
         }
         if running {
-            let total = dauersec + pausesec
-            let since = total > 0 ? now.addingTimeInterval(-Double(total)) : nil
-            return .working(since: since)
+            // `start` is the real check-in (for "since HH:MM"); `origin` excludes
+            // paused seconds so `elapsed(origin)` shows active-work time only.
+            let totalSinceStart = dauersec + pausesec
+            let start = totalSinceStart > 0 ? now.addingTimeInterval(-Double(totalSinceStart)) : nil
+            let origin = now.addingTimeInterval(-Double(dauersec))
+            return .working(start: start, origin: origin)
         }
         return .checkedOut
     }

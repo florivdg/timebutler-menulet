@@ -33,11 +33,11 @@ struct StatusMenu: View {
         case .loggedOut: return "Not logged in"
         case .loggedIn: return "Logged in · activity unknown"
         case .checkedOut: return "Checked out"
-        case .working(let since):
-            if let since { return "Working · since \(Self.hm(since)) · \(AppState.elapsed(since))" }
+        case .working(let start, let origin):
+            if let start { return "Working · since \(Self.hm(start)) · \(AppState.elapsed(origin))" }
             return "Working"
-        case .paused(let since):
-            if let since { return "Paused · since \(Self.hm(since)) · \(AppState.elapsed(since))" }
+        case .paused(let start, let origin):
+            if let start { return "Paused · since \(Self.hm(start)) · \(AppState.elapsed(origin))" }
             return "Paused"
         }
     }
