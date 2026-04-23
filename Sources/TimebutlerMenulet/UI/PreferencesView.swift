@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 
 struct PreferencesView: View {
     @EnvironmentObject var state: AppState
@@ -6,6 +7,8 @@ struct PreferencesView: View {
     @State private var password: String = Keychain.readCredentials()?.password ?? ""
     @State private var savedCreds = false
     @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
+    @AppStorage(PreferenceKey.launchAtLogin) private var launchAtLogin = false
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         Form {
@@ -25,6 +28,16 @@ struct PreferencesView: View {
             Section("Menu bar") {
                 Toggle("Show duration next to icon", isOn: $showDurationInMenuBar)
                     .toggleStyle(.checkbox)
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .toggleStyle(.checkbox)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        applyLaunchAtLogin(newValue)
+                    }
+                if let launchAtLoginError {
+                    Text(launchAtLoginError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Check-out projects (built-in)") {
@@ -55,5 +68,26 @@ struct PreferencesView: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        }
+    }
+
+    private func applyLaunchAtLogin(_ enabled: Bool) {
+        let service = SMAppService.mainApp
+        do {
+            if enabled {
+                try service.register()
+            } else {
+                try service.unregister()
+            }
+            launchAtLoginError = nil
+        } catch {
+            launchAtLoginError = "Could not update login item: \(error.localizedDescription). Launch from the .app bundle."
+            let actual = (service.status == .enabled)
+            if launchAtLogin != actual {
+                launchAtLogin = actual
+            }
+        }
     }
 }

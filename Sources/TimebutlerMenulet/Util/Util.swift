@@ -13,6 +13,7 @@ enum WindowID: String, CaseIterable {
 
 enum PreferenceKey {
     static let showDurationInMenuBar = "timebutler.showDurationInMenuBar"
+    static let launchAtLogin = "timebutler.launchAtLogin"
 }
 
 extension String {
