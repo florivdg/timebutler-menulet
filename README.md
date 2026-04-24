@@ -6,7 +6,7 @@ macOS menu-bar app that drives the [Timebutler](https://www.timebutler.com/) web
 
 - Shows your current work/pause status in the menu bar, with elapsed time since check-in.
 - Check in, pause, resume, and check out from the menu — no need to open the Timebutler website.
-- Remembers your login via the macOS Keychain and auto-fills the web login form on return visits (2FA supported).
+- Remembers your login via a namespaced macOS Keychain item and auto-fills the Timebutler web login form on return visits (2FA supported).
 - Optional launch-at-login.
 
 ## Requirements
@@ -46,7 +46,7 @@ Click the menu-bar icon and choose **Login**. A web view opens on `app.timebutle
 Two things are hardcoded to the original author's tenant. If you fork this for your own account, edit:
 
 - **Project IDs** in `Sources/TimebutlerMenulet/Net/TimebutlerClient.swift` — the `defaultProjects` list on `TimebutlerAction.checkOut` (currently `93529` Homeoffice, `93527` Office). Replace with the project IDs from your own Timebutler setup. The hardcoded `projid=93529` in the check-out URL template is rewritten at runtime with the chosen project.
-- **Status scraping** in `Sources/TimebutlerMenulet/Net/HTMLScraper.swift` — the dashboard HTML is pattern-matched against German and English markers (`gestartet um`, `pausiert`, `ausgecheckt`, etc.). If Timebutler changes the dashboard copy, fix it here.
+- **Status scraping** in `Sources/TimebutlerMenulet/Net/HTMLScraper.swift` — the dashboard HTML is read from the `#time-clock` widget's `data-*` attributes. If Timebutler changes that widget, fix it here.
 
 ## Project layout
 
