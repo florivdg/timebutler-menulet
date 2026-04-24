@@ -78,8 +78,10 @@ final class AppState: ObservableObject {
         do {
             let s = try await client.fetchStatus()
             self.status = s
+            self.lastError = nil
         } catch TimebutlerClient.ClientError.expired {
             self.status = .loggedOut
+            self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
         }

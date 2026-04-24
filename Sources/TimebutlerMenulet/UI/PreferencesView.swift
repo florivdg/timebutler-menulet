@@ -6,6 +6,7 @@ struct PreferencesView: View {
     @State private var email: String = Keychain.readCredentials()?.email ?? ""
     @State private var password: String = Keychain.readCredentials()?.password ?? ""
     @State private var savedCreds = false
+    @State private var credentialsError: String?
     @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
     @AppStorage(PreferenceKey.launchAtLogin) private var launchAtLogin = false
     @State private var launchAtLoginError: String?
@@ -17,11 +18,22 @@ struct PreferencesView: View {
                 SecureField("Password", text: $password).textContentType(.password)
                 HStack {
                     Button("Save to Keychain") {
-                        Keychain.writeCredentials(email: email, password: password)
-                        savedCreds = true
+                        do {
+                            try Keychain.writeCredentials(email: email, password: password)
+                            savedCreds = true
+                            credentialsError = nil
+                        } catch {
+                            savedCreds = false
+                            credentialsError = error.localizedDescription
+                        }
                     }
                     if savedCreds { Text("Saved").foregroundStyle(.secondary) }
                     Spacer()
+                }
+                if let credentialsError {
+                    Text(credentialsError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

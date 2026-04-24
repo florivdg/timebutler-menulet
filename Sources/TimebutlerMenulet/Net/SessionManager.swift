@@ -29,7 +29,7 @@ final class SessionManager: NSObject, WKHTTPCookieStoreObserver {
         let cookies: [HTTPCookie] = await withCheckedContinuation { cont in
             store.getAllCookies { cookies in cont.resume(returning: cookies) }
         }
-        for c in cookies where c.domain.contains("timebutler.com") {
+        for c in cookies where TimebutlerHost.isTrustedCookieDomain(c.domain) {
             HTTPCookieStorage.shared.setCookie(c)
         }
     }
@@ -39,7 +39,7 @@ final class SessionManager: NSObject, WKHTTPCookieStoreObserver {
         let records: [WKWebsiteDataRecord] = await withCheckedContinuation { cont in
             dataStore.fetchDataRecords(ofTypes: types) { cont.resume(returning: $0) }
         }
-        let toRemove = records.filter { $0.displayName.contains("timebutler.com") }
+        let toRemove = records.filter { TimebutlerHost.isTrustedCookieDomain($0.displayName) }
         if !toRemove.isEmpty {
             await withCheckedContinuation { cont in
                 dataStore.removeData(ofTypes: types, for: toRemove) { cont.resume() }

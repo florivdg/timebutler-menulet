@@ -7,6 +7,7 @@ struct WebViewHost: NSViewRepresentable {
     var onCommit: ((URL) -> Void)?
     var onFinish: ((URL) -> Void)?
     var onReady: ((WKWebView) -> Void)?
+    var allowsNavigation: ((URL) -> Bool)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -34,6 +35,22 @@ struct WebViewHost: NSViewRepresentable {
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let u = webView.url { parent.onFinish?(u) }
+        }
+
+        func webView(_ webView: WKWebView,
+                     decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
+            guard isMainFrame, let allowsNavigation = parent.allowsNavigation else {
+                decisionHandler(.allow)
+                return
+            }
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.cancel)
+                return
+            }
+            let policy: WKNavigationActionPolicy = allowsNavigation(url) ? .allow : .cancel
+            decisionHandler(policy)
         }
     }
 }

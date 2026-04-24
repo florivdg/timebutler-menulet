@@ -16,6 +16,26 @@ enum PreferenceKey {
     static let launchAtLogin = "timebutler.launchAtLogin"
 }
 
+enum TimebutlerHost {
+    static let appHost = "app.timebutler.com"
+    private static let rootHost = "timebutler.com"
+
+    static func isTrustedAppHost(_ host: String?) -> Bool {
+        host?.lowercased() == appHost
+    }
+
+    static func isTrustedLoginURL(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https" && isTrustedAppHost(url.host)
+    }
+
+    static func isTrustedCookieDomain(_ domain: String) -> Bool {
+        let normalized = domain
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased()
+        return normalized == rootHost || normalized.hasSuffix(".\(rootHost)")
+    }
+}
+
 extension String {
     var jsEscaped: String {
         var out = ""

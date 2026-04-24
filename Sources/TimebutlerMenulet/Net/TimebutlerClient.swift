@@ -124,6 +124,7 @@ final class TimebutlerClient {
         guard let http = resp as? HTTPURLResponse else { throw ClientError.malformed }
         if let final = resp.url, final.path.lowercased().contains("login") { throw ClientError.expired }
         if http.statusCode == 401 || http.statusCode == 403 { throw ClientError.expired }
+        guard (200..<400).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
         guard let s = String(data: data, encoding: .utf8) else { throw ClientError.malformed }
         return s
     }

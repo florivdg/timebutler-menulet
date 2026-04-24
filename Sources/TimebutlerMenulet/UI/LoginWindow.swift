@@ -27,7 +27,8 @@ struct LoginWindow: View {
                 },
                 onReady: { wv in
                     if ref.webView !== wv { ref.webView = wv }
-                }
+                },
+                allowsNavigation: TimebutlerHost.isTrustedLoginURL
             )
             Divider()
             HStack(spacing: 8) {
@@ -101,7 +102,7 @@ struct LoginWindow: View {
     }
 
     private static func looksLoggedIn(_ url: URL) -> Bool {
-        guard url.host?.contains("timebutler.com") == true else { return false }
+        guard TimebutlerHost.isTrustedLoginURL(url) else { return false }
         let path = url.path.lowercased()
         let query = (url.query ?? "").lowercased()
         let blockers = ["login", "signup", "otp", "2fa", "mfa", "verify", "challenge", "two-factor", "twofactor", "authcode"]
