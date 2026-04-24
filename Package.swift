@@ -8,6 +8,10 @@ let package = Package(
         .executableTarget(
             name: "TimebutlerMenulet",
             path: "Sources/TimebutlerMenulet"
+        ),
+        .testTarget(
+            name: "TimebutlerMenuletTests",
+            dependencies: ["TimebutlerMenulet"]
         )
     ]
 )
