@@ -1,19 +1,20 @@
 # TimebutlerMenulet
 
-macOS menu-bar app that drives the [Timebutler](https://www.timebutler.com/) web time-tracker.
+macOS menu-bar app that drives the [Timebutler](https://www.timebutler.com/) web time-tracker via its official REST API (v2).
 
 ## What it does
 
-- Shows your current work/pause status in the menu bar, with elapsed time since check-in.
+- Shows your current work/pause status in the menu bar, with live elapsed time (net work time while running, break time while paused).
 - Check in, pause, resume, and check out from the menu — no need to open the Timebutler website.
-- Remembers your login via a namespaced macOS Keychain item and auto-fills the Timebutler web login form on return visits (2FA supported).
+- Pick project and category for check-out dynamically from your Timebutler account; favorites surface first.
+- Stores a personal access token in the macOS Keychain. No browser session, no cookies, no HTML scraping.
 - Optional launch-at-login.
 
 ## Requirements
 
 - macOS 14 (Sonoma) or newer
 - Swift 5.9 toolchain (Xcode 15+)
-- A Timebutler account
+- A Timebutler account that can create personal access tokens
 
 ## Build & run
 
@@ -31,6 +32,12 @@ For a proper `.app` bundle:
 open build/TimebutlerMenulet.app
 ```
 
+Run the unit tests (Codable model decoding):
+
+```sh
+swift test
+```
+
 The menu bar does not refresh on rebuild. To replace a running instance:
 
 ```sh
@@ -39,24 +46,22 @@ pkill -x TimebutlerMenulet && .build/debug/TimebutlerMenulet
 
 ## First run
 
-Click the menu-bar icon and choose **Login**. A web view opens on `app.timebutler.com/login`. Sign in once; the Keychain remembers your credentials and auto-fills the form next time. If your account has 2FA enabled, enter the one-time code in the OTP field that appears.
+On first launch the menulet opens a **Connect to Timebutler** window. Click "Open Timebutler token settings" to land on the PAT page (`/do?ha=personaltoken&ac=1`) in your default browser, create a token (it starts with `tb_`), paste it into the window, and hit **Validate & Save**. The app calls `GET /user/profile` to confirm the token works, stores it in the Keychain, and starts polling status. You can revoke a token any time in Timebutler; the next request will see a 401, the menulet will flip to "Not connected" and reopen the setup window.
 
-## Configuring for your Timebutler account
+## Configuring
 
-Two things are hardcoded to the original author's tenant. If you fork this for your own account, edit:
-
-- **Project IDs** in `Sources/TimebutlerMenulet/Net/TimebutlerClient.swift` — the `defaultProjects` list on `TimebutlerAction.checkOut` (currently `93529` Homeoffice, `93527` Office). Replace with the project IDs from your own Timebutler setup. The hardcoded `projid=93529` in the check-out URL template is rewritten at runtime with the chosen project.
-- **Status scraping** in `Sources/TimebutlerMenulet/Net/HTMLScraper.swift` — the dashboard HTML is read from the `#time-clock` widget's `data-*` attributes. If Timebutler changes that widget, fix it here.
+There is nothing tenant-specific to edit. Projects and categories come from the API (`/projects`, `/categories`); the dropdown menu builds itself from whatever your account has. A default category for check-out can be pinned via Preferences or the menu's "Category" submenu.
 
 ## Project layout
 
 ```
 Sources/TimebutlerMenulet/
 ├── App/        SwiftUI entry point and the single AppState store
-├── Net/        TimebutlerClient, HTML scraping, WebKit↔URLSession cookie bridge
-├── Security/   Keychain wrapper for storing credentials
-├── UI/         Menu-bar menu, login web view, preferences window
-└── Util/       Shared helpers
+├── Model/      Codable types for ClockStatus, Project, Category, UserProfile
+├── Net/        TimebutlerAPI — Bearer-PAT JSON client
+├── Security/   Keychain wrapper for the personal access token
+├── UI/         Menu, preferences, token setup window
+└── Util/       Shared helpers (WindowID, UserDefaults keys)
 ```
 
-See `CLAUDE.md` for a deeper architectural tour.
+See `CLAUDE.md` for the architectural details (state model, status mapping, polling cadence).
