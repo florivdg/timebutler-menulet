@@ -1,39 +1,60 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 
 struct PreferencesView: View {
     @EnvironmentObject var state: AppState
-    @State private var email: String = Keychain.readCredentials()?.email ?? ""
-    @State private var password: String = Keychain.readCredentials()?.password ?? ""
-    @State private var savedCreds = false
-    @State private var credentialsError: String?
+    @Environment(\.openWindow) private var openWindow
     @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
     @AppStorage(PreferenceKey.launchAtLogin) private var launchAtLogin = false
+    @AppStorage(PreferenceKey.selectedCategoryId) private var selectedCategoryId: String = ""
     @State private var launchAtLoginError: String?
+
+    private var hasToken: Bool { state.status != .noToken }
 
     var body: some View {
         Form {
-            Section("Timebutler credentials") {
-                TextField("Email", text: $email).textContentType(.username)
-                SecureField("Password", text: $password).textContentType(.password)
+            Section("Personal access token") {
                 HStack {
-                    Button("Save to Keychain") {
-                        do {
-                            try Keychain.writeCredentials(email: email, password: password)
-                            savedCreds = true
-                            credentialsError = nil
-                        } catch {
-                            savedCreds = false
-                            credentialsError = error.localizedDescription
-                        }
+                    Image(systemName: hasToken ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(hasToken ? .green : .orange)
+                    if let name = state.userDisplayName, hasToken {
+                        Text("Signed in as \(name)")
+                    } else if hasToken {
+                        Text("Token stored in Keychain")
+                    } else {
+                        Text("No token configured")
                     }
-                    if savedCreds { Text("Saved").foregroundStyle(.secondary) }
                     Spacer()
                 }
-                if let credentialsError {
-                    Text(credentialsError)
+                HStack {
+                    Button(hasToken ? "Replace token…" : "Set up token…") {
+                        openWindow(id: WindowID.tokenSetup.rawValue)
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                    Button("Forget token", role: .destructive) {
+                        Keychain.deleteToken()
+                    }
+                    .disabled(!hasToken)
+                    Spacer()
+                }
+            }
+
+            Section("Default category for check-out") {
+                if state.categories.isEmpty {
+                    Text("Categories will appear after the token is validated.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else {
+                    Picker("Category", selection: $selectedCategoryId) {
+                        if !state.isCategoryMandatory {
+                            Text("None").tag("")
+                        }
+                        ForEach(state.categories) { category in
+                            Text(category.name).tag(category.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
             }
 
@@ -52,29 +73,9 @@ struct PreferencesView: View {
                 }
             }
 
-            Section("Check-out projects (built-in)") {
-                ForEach(TimebutlerAction.checkOut.defaultProjects, id: \.value) { p in
-                    HStack {
-                        Text(p.label).bold()
-                        Spacer()
-                        Text("projid=\(p.value)")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text("Edit TimebutlerAction.defaultProjects in source to change.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section("Session") {
-                HStack {
-                    Button("Clear cookies (force re-login)") {
-                        Task { await state.session.clearCookies() }
-                    }
-                    Spacer()
-                    Button("Refresh status") {
-                        Task { await state.refreshStatus() }
-                    }
+            Section {
+                Button("Refresh status") {
+                    Task { await state.refreshStatus() }
                 }
             }
         }

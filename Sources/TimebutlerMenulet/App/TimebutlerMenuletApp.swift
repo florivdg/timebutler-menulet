@@ -12,6 +12,7 @@ struct TimebutlerMenuletApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state = AppState()
     @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         MenuBarExtra {
@@ -27,9 +28,9 @@ struct TimebutlerMenuletApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        Window(WindowID.login.title, id: WindowID.login.rawValue) {
-            LoginWindow().environmentObject(state)
-                .frame(minWidth: 520, minHeight: 680)
+        Window(WindowID.tokenSetup.title, id: WindowID.tokenSetup.rawValue) {
+            TokenSetupWindow().environmentObject(state)
+                .onAppear { NSApp.activate(ignoringOtherApps: true) }
         }
         .windowResizability(.contentSize)
 
