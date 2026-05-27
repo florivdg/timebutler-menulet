@@ -8,6 +8,7 @@ struct PreferencesView: View {
     @AppStorage(PreferenceKey.showDurationInMenuBar) private var showDurationInMenuBar = false
     @AppStorage(PreferenceKey.launchAtLogin) private var launchAtLogin = false
     @AppStorage(PreferenceKey.selectedCategoryId) private var selectedCategoryId: String = ""
+    @AppStorage(PreferenceKey.respectGermanBreakMinimums) private var respectGermanBreakMinimums = false
     @State private var launchAtLoginError: String?
 
     private var hasToken: Bool { state.status != .noToken }
@@ -56,6 +57,14 @@ struct PreferencesView: View {
                     }
                     .pickerStyle(.menu)
                 }
+            }
+
+            Section("Check-out") {
+                Toggle("Enforce German legal break minimums (§4 ArbZG)", isOn: $respectGermanBreakMinimums)
+                    .toggleStyle(.checkbox)
+                Text("When you check out before the legal break has been reached, the menulet keeps you paused for the missing minutes and performs the check-out automatically afterwards, so no worked time is lost.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Menu bar") {

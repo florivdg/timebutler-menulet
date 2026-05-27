@@ -27,11 +27,20 @@ enum ActionKind {
     case stop(projectId: String?, categoryId: String?)
 }
 
+struct PendingCheckout: Codable, Equatable {
+    let projectId: String?
+    let categoryId: String?
+    let fireAt: Date
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var status: WorkStatus = .unknown
     @Published var lastError: String?
-    @Published var projects: [Project] = []
+    @Published var projects: [Project] = [] {
+        didSet { projectsById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) }) }
+    }
+    @Published private(set) var projectsById: [String: Project] = [:]
     @Published var categories: [TimebutlerCategory] = [] {
         didSet { categoriesById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) }) }
     }
@@ -42,12 +51,14 @@ final class AppState: ObservableObject {
     @Published var isCategoryMandatory: Bool = false
     @Published var userDisplayName: String?
     @Published private(set) var latestStatus: ClockStatus?
+    @Published private(set) var pendingCheckout: PendingCheckout?
     @Published private var tick: Date = .init()
 
     let api: TimebutlerAPI
 
     private var pollTimer: Timer?
     private var uiTickTimer: Timer?
+    private var pendingCheckoutTimer: Timer?
     private var tokenObserver: NSObjectProtocol?
     private var hasLoadedLookups = false
 
@@ -64,9 +75,19 @@ final class AppState: ObservableObject {
         }
     }
 
-    static func elapsed(_ since: Date, now: Date = Date(), subtractingSeconds: Int = 0) -> String {
-        let s = max(0, Int(now.timeIntervalSince(since)) - subtractingSeconds)
+    static func hoursMinutes(seconds: Int) -> String {
+        let s = max(0, seconds)
         return String(format: "%dh %02dm", s / 3600, (s % 3600) / 60)
+    }
+
+    static func elapsed(_ since: Date, now: Date = Date(), subtractingSeconds: Int = 0) -> String {
+        hoursMinutes(seconds: Int(now.timeIntervalSince(since)) - subtractingSeconds)
+    }
+
+    private func applyStatus(_ s: ClockStatus) {
+        self.latestStatus = s
+        self.status = s.toWorkStatus()
+        self.lastError = nil
     }
 
     var menuBarDurationText: String? {
@@ -103,6 +124,11 @@ final class AppState: ObservableObject {
             Task { @MainActor in await self?.handleTokenChange() }
         }
 
+        if let restored = Self.loadPersistedPendingCheckout() {
+            self.pendingCheckout = restored
+            armPendingCheckoutTimer()
+        }
+
         Task { await self.refreshStatus() }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { await self?.refreshStatus() }
@@ -114,6 +140,7 @@ final class AppState: ObservableObject {
 
     deinit {
         if let tokenObserver { NotificationCenter.default.removeObserver(tokenObserver) }
+        pendingCheckoutTimer?.invalidate()
     }
 
     private func handleTokenChange() async {
@@ -136,10 +163,7 @@ final class AppState: ObservableObject {
             return
         }
         do {
-            let s = try await api.status()
-            self.latestStatus = s
-            self.status = s.toWorkStatus()
-            self.lastError = nil
+            applyStatus(try await api.status())
             if !hasLoadedLookups {
                 hasLoadedLookups = true
                 await loadLookups()
@@ -208,6 +232,7 @@ final class AppState: ObservableObject {
     }
 
     func perform(_ kind: ActionKind) async {
+        cancelPendingCheckout()
         do {
             let newStatus: ClockStatus?
             switch kind {
@@ -223,13 +248,93 @@ final class AppState: ObservableObject {
                 _ = try await api.stop(projectId: projectId, categoryId: categoryId)
                 newStatus = try await api.status()
             }
-            if let newStatus {
-                self.latestStatus = newStatus
-                self.status = newStatus.toWorkStatus()
-            }
-            self.lastError = nil
+            if let newStatus { applyStatus(newStatus) } else { self.lastError = nil }
         } catch {
             handle(error)
         }
+    }
+
+    // MARK: - German legal break enforcement (Arbeitszeitgesetz §4)
+
+    /// Returns the shortfall in seconds when the user must take a longer break before stopping;
+    /// returns `nil` when the check-out has already been performed (feature off or no shortfall).
+    func requestCheckout(projectId: String?, categoryId: String?) async -> Int? {
+        let respect = UserDefaults.standard.bool(forKey: PreferenceKey.respectGermanBreakMinimums)
+        if respect {
+            await refreshStatus()
+            if let status = latestStatus {
+                let shortfall = BreakRules.shortfallSeconds(from: status)
+                if shortfall > 0 { return shortfall }
+            }
+        }
+        await perform(.stop(projectId: projectId, categoryId: categoryId))
+        return nil
+    }
+
+    func confirmPendingCheckout(projectId: String?, categoryId: String?, shortfallSeconds: Int) async {
+        if status.isRunning {
+            do {
+                applyStatus(try await api.pause())
+            } catch {
+                handle(error)
+                return
+            }
+        }
+        let fireAt = Date().addingTimeInterval(TimeInterval(shortfallSeconds))
+        let pending = PendingCheckout(projectId: projectId, categoryId: categoryId, fireAt: fireAt)
+        Self.persistPendingCheckout(pending)
+        self.pendingCheckout = pending
+        armPendingCheckoutTimer()
+    }
+
+    func cancelPendingCheckout() {
+        pendingCheckoutTimer?.invalidate()
+        pendingCheckoutTimer = nil
+        guard pendingCheckout != nil else { return }
+        Self.clearPersistedPendingCheckout()
+        pendingCheckout = nil
+    }
+
+    private func armPendingCheckoutTimer() {
+        pendingCheckoutTimer?.invalidate()
+        guard let pending = pendingCheckout else { return }
+        let interval = pending.fireAt.timeIntervalSinceNow
+        if interval <= 0 {
+            Task { @MainActor [weak self] in await self?.firePendingCheckout() }
+            return
+        }
+        pendingCheckoutTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.firePendingCheckout() }
+        }
+    }
+
+    private func firePendingCheckout() async {
+        guard let pending = pendingCheckout else { return }
+        do {
+            _ = try await api.stop(projectId: pending.projectId, categoryId: pending.categoryId)
+            applyStatus(try await api.status())
+            Self.clearPersistedPendingCheckout()
+            self.pendingCheckout = nil
+            pendingCheckoutTimer?.invalidate()
+            pendingCheckoutTimer = nil
+        } catch {
+            // Leave the pending entry visible so the user sees the failure in the menu
+            // alongside the error banner; they can cancel and re-check-out manually.
+            handle(error)
+        }
+    }
+
+    private static func persistPendingCheckout(_ pending: PendingCheckout) {
+        guard let data = try? JSONEncoder().encode(pending) else { return }
+        UserDefaults.standard.set(data, forKey: PreferenceKey.pendingCheckout)
+    }
+
+    private static func clearPersistedPendingCheckout() {
+        UserDefaults.standard.removeObject(forKey: PreferenceKey.pendingCheckout)
+    }
+
+    private static func loadPersistedPendingCheckout() -> PendingCheckout? {
+        guard let data = UserDefaults.standard.data(forKey: PreferenceKey.pendingCheckout) else { return nil }
+        return try? JSONDecoder().decode(PendingCheckout.self, from: data)
     }
 }
