@@ -11,8 +11,8 @@ macOS menu bar utility (SwiftUI + AppKit) that drives the Timebutler web time-tr
 - `swift build` / `swift build -c release` — compile.
 - `swift test` — run unit tests (Codable models, etc.).
 - `.build/debug/TimebutlerMenulet` — launch the raw binary; it runs as an `.accessory` activation policy (menu-bar only, no Dock icon) because `AppDelegate.applicationWillFinishLaunching` sets it at runtime. Handy during dev since you don't need the `.app` bundle.
-- `./build-app.sh` — release-builds, wraps the binary into `build/TimebutlerMenulet.app` with an `LSUIElement` `Info.plist` and an ad-hoc codesign. `open build/TimebutlerMenulet.app` to launch.
-- To replace a running instance: `pkill -x TimebutlerMenulet` then relaunch.
+- `./build-app.sh` — release-builds, wraps the binary into `build/TimebutlerMenulet.app` with an `LSUIElement` `Info.plist` and an ad-hoc codesign, then installs it to `~/Applications/TimebutlerMenulet.app` and (re)loads the `com.local.timebutlermenulet` LaunchAgent that runs it at login. Idempotent — it boots out the old job and kills any stray process first, so a rebuild never leaves two menu-bar icons. `--no-install` stops after staging `build/`.
+- To replace a running instance: re-run `./build-app.sh` (it handles the restart), or for the debug binary `pkill -x TimebutlerMenulet` then relaunch.
 
 ## Architecture
 
@@ -59,3 +59,4 @@ Categories are fetched after the token validates (in `loadLookups()`) and cached
 - `build-app.sh` still has a loop to copy `.build/release/*.bundle` into the `.app`. That bundle existed when `Package.swift` had `resources: [.copy("Resources")]`; currently a no-op, harmless, kept in case resources return.
 - Persistence is intentionally narrow: Keychain holds the PAT; `UserDefaults` only holds `timebutler.showDurationInMenuBar`, `timebutler.launchAtLogin`, `timebutler.selectedCategoryId`, `timebutler.respectGermanBreakMinimums`, and `timebutler.pendingCheckout`.
 - The Swift type for categories is named `TimebutlerCategory` to avoid colliding with the system `Category` typealias.
+- Auto-launch is a LaunchAgent (`Util/LoginItem.swift`), not `SMAppService`: the bundle is ad-hoc signed, so its signature changes on every rebuild and macOS can silently drop an `SMAppService` registration. The plist points at a stable `~/Applications` path instead. Preferences → "Launch at login" and `build-app.sh` write the *same* plist, so there is only ever one mechanism. `LoginItem` deliberately never shells out to `launchctl`: booting the job out would kill the app whenever launchd started it, and bootstrapping it while an unmanaged copy runs would add a second menu-bar icon. Writing the file is enough — launchd reads it at the next login.

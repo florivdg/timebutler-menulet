@@ -8,7 +8,7 @@ macOS menu-bar app that drives the [Timebutler](https://www.timebutler.com/) web
 - Check in, pause, resume, and check out from the menu — no need to open the Timebutler website.
 - Pin a category for check-out, loaded dynamically from your Timebutler account.
 - Stores a personal access token in the macOS Keychain. No browser session, no cookies, no HTML scraping.
-- Optional launch-at-login.
+- Launch at login, via a LaunchAgent installed by `build-app.sh`.
 
 ## Requirements
 
@@ -25,11 +25,20 @@ swift build
 .build/debug/TimebutlerMenulet
 ```
 
-For a proper `.app` bundle:
+For a release build:
 
 ```sh
 ./build-app.sh
-open build/TimebutlerMenulet.app
+```
+
+This stages `build/TimebutlerMenulet.app`, installs it to `~/Applications/TimebutlerMenulet.app`, and writes a per-user LaunchAgent at `~/Library/LaunchAgents/com.local.timebutlermenulet.plist` that starts it now and at every login. Re-running the script is idempotent: it stops the running copy, replaces the bundle, and reloads the job, so there is never more than one menu-bar icon. Pass `--no-install` to build the bundle without touching `~/Applications` or launchd.
+
+Preferences → **Launch at login** manages the very same plist, so the checkbox and the install script never disagree. Unchecking it stops the app coming back at the next login without quitting the running copy; checking it takes effect at the next login. To undo the install entirely:
+
+```sh
+launchctl bootout gui/$(id -u)/com.local.timebutlermenulet
+rm ~/Library/LaunchAgents/com.local.timebutlermenulet.plist
+rm -rf ~/Applications/TimebutlerMenulet.app
 ```
 
 Run the unit tests (Codable model decoding):

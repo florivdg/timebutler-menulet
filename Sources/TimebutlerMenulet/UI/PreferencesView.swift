@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import ServiceManagement
 
 struct PreferencesView: View {
     @EnvironmentObject var state: AppState
@@ -75,11 +74,9 @@ struct PreferencesView: View {
                     .onChange(of: launchAtLogin) { _, newValue in
                         applyLaunchAtLogin(newValue)
                     }
-                if let launchAtLoginError {
-                    Text(launchAtLoginError)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(launchAtLoginError ?? "Takes effect at your next login. Managed as a LaunchAgent, the same one ./build-app.sh installs.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -91,22 +88,17 @@ struct PreferencesView: View {
         .formStyle(.grouped)
         .padding()
         .onAppear {
-            launchAtLogin = (SMAppService.mainApp.status == .enabled)
+            launchAtLogin = LoginItem.isEnabled
         }
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
-        let service = SMAppService.mainApp
         do {
-            if enabled {
-                try service.register()
-            } else {
-                try service.unregister()
-            }
+            try LoginItem.setEnabled(enabled)
             launchAtLoginError = nil
         } catch {
-            launchAtLoginError = "Could not update login item: \(error.localizedDescription). Launch from the .app bundle."
-            let actual = (service.status == .enabled)
+            launchAtLoginError = error.localizedDescription
+            let actual = LoginItem.isEnabled
             if launchAtLogin != actual {
                 launchAtLogin = actual
             }
