@@ -24,11 +24,10 @@ enum WorkStatus: Equatable {
 
 enum ActionKind {
     case start, pause, resume, cancel
-    case stop(projectId: String?, categoryId: String?)
+    case stop(categoryId: String?)
 }
 
 struct PendingCheckout: Codable, Equatable {
-    let projectId: String?
     let categoryId: String?
     let fireAt: Date
 }
@@ -37,17 +36,11 @@ struct PendingCheckout: Codable, Equatable {
 final class AppState: ObservableObject {
     @Published var status: WorkStatus = .unknown
     @Published var lastError: String?
-    @Published var projects: [Project] = [] {
-        didSet { projectsById = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) }) }
-    }
-    @Published private(set) var projectsById: [String: Project] = [:]
     @Published var categories: [TimebutlerCategory] = [] {
         didSet { categoriesById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) }) }
     }
     @Published private(set) var categoriesById: [String: TimebutlerCategory] = [:]
-    @Published var defaultProjectId: String?
     @Published var defaultCategoryId: String?
-    @Published var isProjectMandatory: Bool = false
     @Published var isCategoryMandatory: Bool = false
     @Published var userDisplayName: String?
     @Published private(set) var latestStatus: ClockStatus?
@@ -146,7 +139,6 @@ final class AppState: ObservableObject {
     private func handleTokenChange() async {
         api.reloadToken()
         hasLoadedLookups = false
-        projects = []
         categories = []
         userDisplayName = nil
         if api.hasToken {
@@ -190,22 +182,6 @@ final class AppState: ObservableObject {
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    let p = try await self.api.projects()
-                    self.projects = p.projects.sorted { lhs, rhs in
-                        if (lhs.isFavorite ?? false) != (rhs.isFavorite ?? false) {
-                            return (lhs.isFavorite ?? false) && !(rhs.isFavorite ?? false)
-                        }
-                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                    }
-                    self.defaultProjectId = p.defaultProjectId
-                    self.isProjectMandatory = p.isProjectMandatory ?? false
-                } catch {
-                    self.lastError = "Could not load projects: \(error.localizedDescription)"
-                }
-            }
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                do {
                     let c = try await self.api.categories()
                     self.categories = c.categories.sorted {
                         $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -244,8 +220,8 @@ final class AppState: ObservableObject {
                 newStatus = try await api.resume()
             case .cancel:
                 newStatus = try await api.cancel()
-            case .stop(let projectId, let categoryId):
-                _ = try await api.stop(projectId: projectId, categoryId: categoryId)
+            case .stop(let categoryId):
+                _ = try await api.stop(categoryId: categoryId)
                 newStatus = try await api.status()
             }
             if let newStatus { applyStatus(newStatus) } else { self.lastError = nil }
@@ -258,7 +234,7 @@ final class AppState: ObservableObject {
 
     /// Returns the shortfall in seconds when the user must take a longer break before stopping;
     /// returns `nil` when the check-out has already been performed (feature off or no shortfall).
-    func requestCheckout(projectId: String?, categoryId: String?) async -> Int? {
+    func requestCheckout(categoryId: String?) async -> Int? {
         let respect = UserDefaults.standard.bool(forKey: PreferenceKey.respectGermanBreakMinimums)
         if respect {
             await refreshStatus()
@@ -267,11 +243,11 @@ final class AppState: ObservableObject {
                 if shortfall > 0 { return shortfall }
             }
         }
-        await perform(.stop(projectId: projectId, categoryId: categoryId))
+        await perform(.stop(categoryId: categoryId))
         return nil
     }
 
-    func confirmPendingCheckout(projectId: String?, categoryId: String?, shortfallSeconds: Int) async {
+    func confirmPendingCheckout(categoryId: String?, shortfallSeconds: Int) async {
         if status.isRunning {
             do {
                 applyStatus(try await api.pause())
@@ -281,7 +257,7 @@ final class AppState: ObservableObject {
             }
         }
         let fireAt = Date().addingTimeInterval(TimeInterval(shortfallSeconds))
-        let pending = PendingCheckout(projectId: projectId, categoryId: categoryId, fireAt: fireAt)
+        let pending = PendingCheckout(categoryId: categoryId, fireAt: fireAt)
         Self.persistPendingCheckout(pending)
         self.pendingCheckout = pending
         armPendingCheckoutTimer()
@@ -311,7 +287,7 @@ final class AppState: ObservableObject {
     private func firePendingCheckout() async {
         guard let pending = pendingCheckout else { return }
         do {
-            _ = try await api.stop(projectId: pending.projectId, categoryId: pending.categoryId)
+            _ = try await api.stop(categoryId: pending.categoryId)
             applyStatus(try await api.status())
             Self.clearPersistedPendingCheckout()
             self.pendingCheckout = nil

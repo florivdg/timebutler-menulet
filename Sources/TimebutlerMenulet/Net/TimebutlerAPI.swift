@@ -76,7 +76,6 @@ final class TimebutlerAPI {
     }
 
     struct StopBody: Encodable {
-        let projectId: Int?
         let categoryId: Int?
         let remarks: String?
     }
@@ -88,9 +87,8 @@ final class TimebutlerAPI {
     }
 
     @discardableResult
-    func stop(projectId: String?, categoryId: String?, remarks: String? = nil) async throws -> StopResult? {
+    func stop(categoryId: String?, remarks: String? = nil) async throws -> StopResult? {
         let body = StopBody(
-            projectId: projectId.flatMap(Int.init),
             categoryId: categoryId.flatMap(Int.init),
             remarks: (remarks?.isEmpty ?? true) ? nil : remarks
         )
@@ -103,10 +101,6 @@ final class TimebutlerAPI {
         } catch {
             throw APIError.malformed(String(describing: error))
         }
-    }
-
-    func projects() async throws -> ProjectsResponse {
-        try await request("/projects", method: "GET")
     }
 
     func categories() async throws -> CategoriesResponse {
