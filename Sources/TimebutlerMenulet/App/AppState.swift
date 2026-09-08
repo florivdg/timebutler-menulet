@@ -182,39 +182,40 @@ final class AppState: ObservableObject {
     /// `hasLoadedLookups` is set only once the category fetch actually succeeds, so a
     /// transient failure is retried by the next 60 s status poll instead of leaving the
     /// session without categories until the app is restarted.
-    func loadLookups() async {
+    private func loadLookups() async {
         guard !isLoadingLookups else { return }
         isLoadingLookups = true
         defer { isLoadingLookups = false }
 
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                do {
-                    let c = try await self.api.categories()
-                    self.categories = c.categories.sorted {
-                        $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-                    }
-                    self.defaultCategoryId = c.defaultCategoryId
-                    self.isCategoryMandatory = c.isCategoryMandatory ?? false
-                    self.hasLoadedLookups = true
-                } catch {
-                    self.lastError = "Could not load categories: \(error.localizedDescription)"
-                }
+        // The profile is cosmetic and fetched only until it lands, so a category fetch that
+        // keeps failing doesn't re-request it on every poll.
+        async let profile = userDisplayName == nil ? try? api.profile() : nil
+
+        do {
+            let c = try await api.categories()
+            categories = c.categories.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                if let profile = try? await self.api.profile() {
-                    self.userDisplayName = profile.displayName
-                }
-            }
+            defaultCategoryId = c.defaultCategoryId
+            isCategoryMandatory = c.isCategoryMandatory ?? false
+            hasLoadedLookups = true
+        } catch {
+            lastError = "Could not load categories: \(error.localizedDescription)"
         }
+
+        if let displayName = await profile?.displayName { userDisplayName = displayName }
+    }
+
+    /// The raw pin: `nil` when the user has never chosen, `""` when they explicitly picked
+    /// "None" (which is what `@AppStorage` writes for that row), otherwise a category id.
+    private var pinnedCategoryId: String? {
+        UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId)
     }
 
     var effectiveCategoryId: String? {
         Self.effectiveCategoryId(
-            pinnedCategoryId: UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId),
-            knownCategoryIds: Set(categoriesById.keys),
+            pinnedCategoryId: pinnedCategoryId,
+            isKnownCategoryId: { [categoriesById] in categoriesById[$0] != nil },
             defaultCategoryId: defaultCategoryId
         )
     }
@@ -224,13 +225,12 @@ final class AppState: ObservableObject {
     /// that no longer exists in the account falls back to the default.
     nonisolated static func effectiveCategoryId(
         pinnedCategoryId: String?,
-        knownCategoryIds: Set<String>,
+        isKnownCategoryId: (String) -> Bool,
         defaultCategoryId: String?
     ) -> String? {
         guard let pinnedCategoryId else { return defaultCategoryId }
         if pinnedCategoryId.isEmpty { return nil }
-        if knownCategoryIds.contains(pinnedCategoryId) { return pinnedCategoryId }
-        return defaultCategoryId
+        return isKnownCategoryId(pinnedCategoryId) ? pinnedCategoryId : defaultCategoryId
     }
 
     /// True when a category ought to be sent with the check-out but the list has not loaded,
@@ -238,19 +238,16 @@ final class AppState: ObservableObject {
     var isCategoryUnresolved: Bool {
         Self.isCategoryUnresolved(
             hasLoadedCategories: hasLoadedLookups,
-            isCategoryMandatory: isCategoryMandatory,
-            pinnedCategoryId: UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId)
+            pinnedCategoryId: pinnedCategoryId
         )
     }
 
     nonisolated static func isCategoryUnresolved(
         hasLoadedCategories: Bool,
-        isCategoryMandatory: Bool,
         pinnedCategoryId: String?
     ) -> Bool {
         guard !hasLoadedCategories else { return false }
-        if isCategoryMandatory { return true }
-        return !(pinnedCategoryId?.isEmpty ?? true)
+        return pinnedCategoryId?.isEmpty == false
     }
 
     func perform(_ kind: ActionKind) async {
