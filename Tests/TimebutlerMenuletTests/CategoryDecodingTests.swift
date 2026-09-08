@@ -48,3 +48,29 @@ final class CategoryResolutionTests: XCTestCase {
         ))
     }
 }
+
+final class EffectiveCategoryTests: XCTestCase {
+    func testNeverChosenUsesAccountDefault() {
+        XCTAssertEqual(AppState.effectiveCategoryId(
+            pinnedCategoryId: nil, knownCategoryIds: ["7"], defaultCategoryId: "7"
+        ), "7")
+    }
+
+    func testExplicitNoneBeatsAccountDefault() {
+        XCTAssertNil(AppState.effectiveCategoryId(
+            pinnedCategoryId: "", knownCategoryIds: ["7"], defaultCategoryId: "7"
+        ))
+    }
+
+    func testPinnedCategoryWins() {
+        XCTAssertEqual(AppState.effectiveCategoryId(
+            pinnedCategoryId: "9", knownCategoryIds: ["7", "9"], defaultCategoryId: "7"
+        ), "9")
+    }
+
+    func testStalePinFallsBackToAccountDefault() {
+        XCTAssertEqual(AppState.effectiveCategoryId(
+            pinnedCategoryId: "42", knownCategoryIds: ["7"], defaultCategoryId: "7"
+        ), "7")
+    }
+}

@@ -212,8 +212,24 @@ final class AppState: ObservableObject {
     }
 
     var effectiveCategoryId: String? {
-        let stored = UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId)
-        if let stored, categoriesById[stored] != nil { return stored }
+        Self.effectiveCategoryId(
+            pinnedCategoryId: UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId),
+            knownCategoryIds: Set(categoriesById.keys),
+            defaultCategoryId: defaultCategoryId
+        )
+    }
+
+    /// An absent key means the user has never chosen, so the account default applies; an empty
+    /// string means they explicitly pinned "None" and no category should be sent. A pinned id
+    /// that no longer exists in the account falls back to the default.
+    nonisolated static func effectiveCategoryId(
+        pinnedCategoryId: String?,
+        knownCategoryIds: Set<String>,
+        defaultCategoryId: String?
+    ) -> String? {
+        guard let pinnedCategoryId else { return defaultCategoryId }
+        if pinnedCategoryId.isEmpty { return nil }
+        if knownCategoryIds.contains(pinnedCategoryId) { return pinnedCategoryId }
         return defaultCategoryId
     }
 
