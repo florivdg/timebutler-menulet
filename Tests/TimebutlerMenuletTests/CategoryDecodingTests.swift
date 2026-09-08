@@ -23,28 +23,22 @@ final class CategoryDecodingTests: XCTestCase {
 final class CategoryResolutionTests: XCTestCase {
     func testResolvedOnceCategoriesHaveLoaded() {
         XCTAssertFalse(AppState.isCategoryUnresolved(
-            hasLoadedCategories: true, isCategoryMandatory: true, pinnedCategoryId: "7"
+            hasLoadedCategories: true, pinnedCategoryId: "7"
         ))
     }
 
     func testUnresolvedWhenPinnedCategoryCannotBeChecked() {
         XCTAssertTrue(AppState.isCategoryUnresolved(
-            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: "7"
+            hasLoadedCategories: false, pinnedCategoryId: "7"
         ))
     }
 
-    func testUnresolvedWhenCategoryIsMandatory() {
-        XCTAssertTrue(AppState.isCategoryUnresolved(
-            hasLoadedCategories: false, isCategoryMandatory: true, pinnedCategoryId: nil
-        ))
-    }
-
-    func testResolvedWhenNothingIsPinnedAndNothingIsMandatory() {
+    func testResolvedWhenNothingIsPinned() {
         XCTAssertFalse(AppState.isCategoryUnresolved(
-            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: nil
+            hasLoadedCategories: false, pinnedCategoryId: nil
         ))
         XCTAssertFalse(AppState.isCategoryUnresolved(
-            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: ""
+            hasLoadedCategories: false, pinnedCategoryId: ""
         ))
     }
 }
@@ -52,25 +46,25 @@ final class CategoryResolutionTests: XCTestCase {
 final class EffectiveCategoryTests: XCTestCase {
     func testNeverChosenUsesAccountDefault() {
         XCTAssertEqual(AppState.effectiveCategoryId(
-            pinnedCategoryId: nil, knownCategoryIds: ["7"], defaultCategoryId: "7"
+            pinnedCategoryId: nil, isKnownCategoryId: { ["7"].contains($0) }, defaultCategoryId: "7"
         ), "7")
     }
 
     func testExplicitNoneBeatsAccountDefault() {
         XCTAssertNil(AppState.effectiveCategoryId(
-            pinnedCategoryId: "", knownCategoryIds: ["7"], defaultCategoryId: "7"
+            pinnedCategoryId: "", isKnownCategoryId: { ["7"].contains($0) }, defaultCategoryId: "7"
         ))
     }
 
     func testPinnedCategoryWins() {
         XCTAssertEqual(AppState.effectiveCategoryId(
-            pinnedCategoryId: "9", knownCategoryIds: ["7", "9"], defaultCategoryId: "7"
+            pinnedCategoryId: "9", isKnownCategoryId: { ["7", "9"].contains($0) }, defaultCategoryId: "7"
         ), "9")
     }
 
     func testStalePinFallsBackToAccountDefault() {
         XCTAssertEqual(AppState.effectiveCategoryId(
-            pinnedCategoryId: "42", knownCategoryIds: ["7"], defaultCategoryId: "7"
+            pinnedCategoryId: "42", isKnownCategoryId: { ["7"].contains($0) }, defaultCategoryId: "7"
         ), "7")
     }
 }
