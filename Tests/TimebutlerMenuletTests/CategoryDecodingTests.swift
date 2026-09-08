@@ -19,3 +19,32 @@ final class CategoryDecodingTests: XCTestCase {
         XCTAssertEqual(decoded.isCategoryMandatory, false)
     }
 }
+
+final class CategoryResolutionTests: XCTestCase {
+    func testResolvedOnceCategoriesHaveLoaded() {
+        XCTAssertFalse(AppState.isCategoryUnresolved(
+            hasLoadedCategories: true, isCategoryMandatory: true, pinnedCategoryId: "7"
+        ))
+    }
+
+    func testUnresolvedWhenPinnedCategoryCannotBeChecked() {
+        XCTAssertTrue(AppState.isCategoryUnresolved(
+            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: "7"
+        ))
+    }
+
+    func testUnresolvedWhenCategoryIsMandatory() {
+        XCTAssertTrue(AppState.isCategoryUnresolved(
+            hasLoadedCategories: false, isCategoryMandatory: true, pinnedCategoryId: nil
+        ))
+    }
+
+    func testResolvedWhenNothingIsPinnedAndNothingIsMandatory() {
+        XCTAssertFalse(AppState.isCategoryUnresolved(
+            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: nil
+        ))
+        XCTAssertFalse(AppState.isCategoryUnresolved(
+            hasLoadedCategories: false, isCategoryMandatory: false, pinnedCategoryId: ""
+        ))
+    }
+}
