@@ -6,7 +6,7 @@ macOS menu-bar app that drives the [Timebutler](https://www.timebutler.com/) web
 
 - Shows your current work/pause status in the menu bar, with live elapsed time (net work time while running, break time while paused).
 - Check in, pause, resume, and check out from the menu — no need to open the Timebutler website.
-- Pick project and category for check-out dynamically from your Timebutler account; favorites surface first.
+- Pin a category for check-out, loaded dynamically from your Timebutler account.
 - Stores a personal access token in the macOS Keychain. No browser session, no cookies, no HTML scraping.
 - Optional launch-at-login.
 
@@ -50,14 +50,14 @@ On first launch the menulet opens a **Connect to Timebutler** window. Click "Ope
 
 ## Configuring
 
-There is nothing tenant-specific to edit. Projects and categories come from the API (`/projects`, `/categories`); the dropdown menu builds itself from whatever your account has. A default category for check-out can be pinned via Preferences or the menu's "Category" submenu.
+There is nothing tenant-specific to edit. Categories come from the API (`/categories`); the submenu builds itself from whatever your account has. A default category for check-out can be pinned via Preferences or the menu's "Category" submenu. Checking out takes no further selection — it is a single "Check Out" entry.
 
 ## Project layout
 
 ```
 Sources/TimebutlerMenulet/
 ├── App/        SwiftUI entry point and the single AppState store
-├── Model/      Codable types for ClockStatus, Project, Category, UserProfile
+├── Model/      Codable types for ClockStatus, Category, UserProfile
 ├── Net/        TimebutlerAPI — Bearer-PAT JSON client
 ├── Security/   Keychain wrapper for the personal access token
 ├── UI/         Menu, preferences, token setup window

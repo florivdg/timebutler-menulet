@@ -41,44 +41,23 @@ struct StatusMenu: View {
     @ViewBuilder
     private var checkOutMenu: some View {
         if let pending = state.pendingCheckout {
-            Text("Auto check-out at \(Self.hm(pending.fireAt)) · \(projectName(for: pending.projectId))")
+            Text("Auto check-out at \(Self.hm(pending.fireAt))")
                 .foregroundStyle(.secondary)
             Button("Cancel scheduled check-out") { state.cancelPendingCheckout() }
-        } else if state.projects.isEmpty && !state.isProjectMandatory {
-            Button("Check Out") {
-                checkOut(projectId: nil, projectName: "No project")
-            }
-            .disabled(!canStop)
-        } else if state.projects.isEmpty && state.isProjectMandatory {
-            Button("Check Out (no projects loaded)") { }
-                .disabled(true)
         } else {
-            Menu("Check Out as…") {
-                if !state.isProjectMandatory {
-                    Button("No project") {
-                        checkOut(projectId: nil, projectName: "No project")
-                    }
-                    Divider()
-                }
-                ForEach(state.projects) { project in
-                    Button(projectLabel(project)) {
-                        checkOut(projectId: project.id, projectName: project.name)
-                    }
-                }
-            }
-            .disabled(!canStop)
+            Button("Check Out") { checkOut() }
+                .disabled(!canStop)
         }
     }
 
-    private func checkOut(projectId: String?, projectName: String) {
+    private func checkOut() {
         let categoryId = state.effectiveCategoryId
         Task {
-            guard let shortfall = await state.requestCheckout(projectId: projectId, categoryId: categoryId) else { return }
+            guard let shortfall = await state.requestCheckout(categoryId: categoryId) else { return }
             let fireAt = Date().addingTimeInterval(TimeInterval(shortfall))
             let confirmed = Alerts.confirm(
                 title: "German legal break required",
                 message: Self.confirmationMessage(
-                    projectName: projectName,
                     workedSeconds: state.latestStatus?.workTimeElapsedSeconds ?? 0,
                     accumulatedBreakSeconds: state.latestStatus?.accumulatedBreakSeconds ?? 0,
                     shortfallSeconds: shortfall,
@@ -87,13 +66,12 @@ struct StatusMenu: View {
                 confirm: "Pause & check out at \(Self.hm(fireAt))"
             )
             if confirmed {
-                await state.confirmPendingCheckout(projectId: projectId, categoryId: categoryId, shortfallSeconds: shortfall)
+                await state.confirmPendingCheckout(categoryId: categoryId, shortfallSeconds: shortfall)
             }
         }
     }
 
     private static func confirmationMessage(
-        projectName: String,
         workedSeconds: Int,
         accumulatedBreakSeconds: Int,
         shortfallSeconds: Int,
@@ -107,13 +85,8 @@ struct StatusMenu: View {
         return """
         You have worked \(workedHM) with only \(breakHM) of break. Arbeitszeitgesetz §4 requires \(requiredMin) minutes for this duration.
 
-        The menulet will keep you paused for \(shortfallMin) more \(minuteWord) and check you out as “\(projectName)” at \(hm(fireAt)) so no worked time is lost.
+        The menulet will keep you paused for \(shortfallMin) more \(minuteWord) and check you out at \(hm(fireAt)) so no worked time is lost.
         """
-    }
-
-    private func projectName(for id: String?) -> String {
-        guard let id else { return "No project" }
-        return state.projectsById[id]?.name ?? "Unknown project"
     }
 
     @ViewBuilder
@@ -141,10 +114,6 @@ struct StatusMenu: View {
             return match.name
         }
         return "None"
-    }
-
-    private func projectLabel(_ p: Project) -> String {
-        (p.isFavorite ?? false) ? "★ \(p.name)" : p.name
     }
 
     private var statusLine: String {
