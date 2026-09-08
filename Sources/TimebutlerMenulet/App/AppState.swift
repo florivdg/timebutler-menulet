@@ -54,6 +54,7 @@ final class AppState: ObservableObject {
     private var pendingCheckoutTimer: Timer?
     private var tokenObserver: NSObjectProtocol?
     private var hasLoadedLookups = false
+    private var isLoadingLookups = false
 
     var needsToken: Bool { !api.hasToken }
 
@@ -140,6 +141,8 @@ final class AppState: ObservableObject {
         api.reloadToken()
         hasLoadedLookups = false
         categories = []
+        defaultCategoryId = nil
+        isCategoryMandatory = false
         userDisplayName = nil
         if api.hasToken {
             status = .unknown
@@ -157,7 +160,6 @@ final class AppState: ObservableObject {
         do {
             applyStatus(try await api.status())
             if !hasLoadedLookups {
-                hasLoadedLookups = true
                 await loadLookups()
             }
         } catch {
@@ -177,7 +179,14 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// `hasLoadedLookups` is set only once the category fetch actually succeeds, so a
+    /// transient failure is retried by the next 60 s status poll instead of leaving the
+    /// session without categories until the app is restarted.
     func loadLookups() async {
+        guard !isLoadingLookups else { return }
+        isLoadingLookups = true
+        defer { isLoadingLookups = false }
+
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
@@ -188,6 +197,7 @@ final class AppState: ObservableObject {
                     }
                     self.defaultCategoryId = c.defaultCategoryId
                     self.isCategoryMandatory = c.isCategoryMandatory ?? false
+                    self.hasLoadedLookups = true
                 } catch {
                     self.lastError = "Could not load categories: \(error.localizedDescription)"
                 }
@@ -205,6 +215,26 @@ final class AppState: ObservableObject {
         let stored = UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId)
         if let stored, categoriesById[stored] != nil { return stored }
         return defaultCategoryId
+    }
+
+    /// True when a category ought to be sent with the check-out but the list has not loaded,
+    /// so `effectiveCategoryId` cannot resolve the pinned id and would silently yield `nil`.
+    var isCategoryUnresolved: Bool {
+        Self.isCategoryUnresolved(
+            hasLoadedCategories: hasLoadedLookups,
+            isCategoryMandatory: isCategoryMandatory,
+            pinnedCategoryId: UserDefaults.standard.string(forKey: PreferenceKey.selectedCategoryId)
+        )
+    }
+
+    nonisolated static func isCategoryUnresolved(
+        hasLoadedCategories: Bool,
+        isCategoryMandatory: Bool,
+        pinnedCategoryId: String?
+    ) -> Bool {
+        guard !hasLoadedCategories else { return false }
+        if isCategoryMandatory { return true }
+        return !(pinnedCategoryId?.isEmpty ?? true)
     }
 
     func perform(_ kind: ActionKind) async {

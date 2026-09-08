@@ -44,6 +44,9 @@ struct StatusMenu: View {
             Text("Auto check-out at \(Self.hm(pending.fireAt))")
                 .foregroundStyle(.secondary)
             Button("Cancel scheduled check-out") { state.cancelPendingCheckout() }
+        } else if state.isCategoryUnresolved {
+            Button("Check Out (categories not loaded)") { }
+                .disabled(true)
         } else {
             Button("Check Out") { checkOut() }
                 .disabled(!canStop)
